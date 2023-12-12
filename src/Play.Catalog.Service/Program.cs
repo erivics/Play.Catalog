@@ -1,3 +1,5 @@
+using Play.Catalog.Service.Dtos;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -16,29 +18,34 @@ if (app.Environment.IsDevelopment())
 
 //app.UseHttpsRedirection();
 
-var summaries = new[]
+//Using Minimal api 
+var items =  new List<ItemDto>()
 {
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
+    new ItemDto(Guid.NewGuid(), "Nike","Pure White", 98, DateTimeOffset.UtcNow),
+    new ItemDto(Guid.NewGuid(), "Lascorte","Dark colour with shining stones ", 110, DateTimeOffset.UtcNow),
+    new ItemDto(Guid.NewGuid(), "Verrari","Badest colour", 50, DateTimeOffset.UtcNow),
 };
-
-app.MapGet("/weatherforecast", () =>
+ 
+app.MapGet("/items", () =>
 {
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
+   return Results.Ok(items);
 })
-.WithName("GetWeatherForecast")
+.WithOpenApi();
+
+app.MapGet("/items/{id}", (Guid id) =>
+{
+   var item = items.Where(item => item.Id == id).SingleOrDefault();
+   return Results.Ok(item);
+})
+.WithName("GetById")
+.WithOpenApi();
+
+app.MapPost("/items", (CreateItemDto createItemDto) =>
+{
+   var item = new ItemDto(Guid.NewGuid(), createItemDto.Name, createItemDto.Description, createItemDto.Price, DateTimeOffset.UtcNow);
+   items.Add(item);
+   return Results.CreatedAtRoute("GetById",  new {id = item.Id}, item);
+})
 .WithOpenApi();
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
