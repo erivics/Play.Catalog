@@ -1,6 +1,11 @@
+using System.ComponentModel;
 using FluentValidation;
 using FluentValidation.Results;
+using Microsoft.AspNetCore.Authorization.Infrastructure;
+using Play.Catalog.Service;
+using Play.Catalog.Service.Entities;
 using Play.Catalog.Service.Dtos;
+using Play.Catalog.Service.Repositories;
 using Play.Catalog.Service.Validations;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -25,34 +30,40 @@ if (app.Environment.IsDevelopment())
 //app.UseHttpsRedirection();
 
 //Using Minimal api 
-var items =  new List<ItemDto>()
-{
-    new ItemDto(Guid.NewGuid(), "Nike","Pure White", 98, DateTimeOffset.UtcNow),
-    new ItemDto(Guid.NewGuid(), "Lascorte","Dark colour with shining stones ", 110, DateTimeOffset.UtcNow),
-    new ItemDto(Guid.NewGuid(), "Verrari","Badest colour", 50, DateTimeOffset.UtcNow),
-};
+// var items =  new List<ItemDto>()
+// {
+//     new ItemDto(Guid.NewGuid(), "Nike","Pure White", 98, DateTimeOffset.UtcNow),
+//     new ItemDto(Guid.NewGuid(), "Lascorte","Dark colour with shining stones ", 110, DateTimeOffset.UtcNow),
+//     new ItemDto(Guid.NewGuid(), "Verrari","Badest colour", 50, DateTimeOffset.UtcNow),
+// };
  
  var Items = app.MapGroup("/items");
+ 
+ 
  //Get/items
-Items.MapGet("/", () =>
+Items.MapGet("/", async (ItemsRepository itemsRepository) =>
 {
+   var items = (await itemsRepository.GetAllAsync())
+                  .Select(item => item.AsDto());
    return Results.Ok(items);
-})
+}).WithName("GetAsync")
 .WithOpenApi();
 
 
+
 //Get/items/{id}
-Items.MapGet("/{id}", (Guid id) =>
+Items.MapGet("/{id}", async (ItemsRepository itemsRepository, Guid id) =>
 {
-   var item = items.Where(item => item.Id == id).SingleOrDefault();
-   if (item is null) return Results.NotFound();
-   return Results.Ok(item);
+   var item = await itemsRepository.GetAsync(id);
+   return Results.Ok(item.AsDto);
 })
 .WithName("GetById")
 .WithOpenApi();
 
+
+
 //Post/items
-Items.MapPost("/", (IValidator<CreateItemDto> validator, CreateItemDto createItemDto) =>
+Items.MapPost("/", async (ItemsRepository itemsRepository, IValidator<CreateItemDto> validator, CreateItemDto createItemDto) =>
 {
    ValidationResult validationResult = validator.Validate(createItemDto);
    
@@ -61,14 +72,19 @@ Items.MapPost("/", (IValidator<CreateItemDto> validator, CreateItemDto createIte
      return Results.ValidationProblem(validationResult.ToDictionary());
    }
 
-   var item = new ItemDto(Guid.NewGuid(), createItemDto.Name, createItemDto.Description, createItemDto.Price, DateTimeOffset.UtcNow);
-   items.Add(item);
+   var item = new Item 
+   {
+      Name = createItemDto.Name, Description = createItemDto.Description, Price = createItemDto.Price, CreatedDate = DateTimeOffset.UtcNow
+   };
+
+   await itemsRepository.CreateAsync(item);
    return Results.CreatedAtRoute("GetById",  new {id = item.Id}, item);
 })
 .WithOpenApi();
 
+
 //Update/items
-Items.MapPut("/{id}", (IValidator<UpdateItemDto> validator, UpdateItemDto updateItemDto, Guid id) =>
+Items.MapPut("/{id}", async (ItemsRepository itemsRepository, IValidator<UpdateItemDto> validator, UpdateItemDto updateItemDto, Guid id) =>
 {
    ValidationResult validationResult = validator.Validate(updateItemDto);
    
@@ -77,30 +93,30 @@ Items.MapPut("/{id}", (IValidator<UpdateItemDto> validator, UpdateItemDto update
      return Results.ValidationProblem(validationResult.ToDictionary());
    }
    
-   var existingItem = items.Where(item => item.Id == id).SingleOrDefault();
-   if (existingItem is null) return Results.NotFound();
-   var updatedItem = existingItem with
+   var existingItem = await itemsRepository.GetAsync(id);
+   if(existingItem is null)
    {
-        Name = updateItemDto.Name,
-        Description = updateItemDto.Description,
-        Price = updateItemDto.Price
+      return Results.NotFound();
+   }
 
-   };
-
-   var index = items.FindIndex(existingItem => existingItem.Id == id);
-   items[index] = updatedItem;
+   existingItem.Name = updateItemDto.Name;
+   existingItem.Description = updateItemDto.Description;
+   existingItem.Price = updateItemDto.Price;
+   await itemsRepository.UpdateAsync(existingItem);
 
    return Results.NoContent();
 })
 .WithOpenApi();
 
 //Delete/items/{id}
-Items.MapDelete("/{id}", (Guid id) =>
+Items.MapDelete("/{id}", async (ItemsRepository itemsRepository,Guid id) =>
 {
-   var index = items.FindIndex(existingItem => existingItem.Id == id);
-   if (index < 0) return Results.NotFound();
-
-   items.RemoveAt(index);
+   var item = await itemsRepository.GetAsync(id);
+   if(item is null)
+   {
+      return Results.NotFound();
+   }
+   await itemsRepository.RemoveAsync(item.Id);
    return Results.NoContent();
 })
 .WithOpenApi();
