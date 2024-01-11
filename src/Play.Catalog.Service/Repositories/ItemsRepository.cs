@@ -11,7 +11,7 @@ namespace Play.Catalog.Service.Repositories
         private readonly FilterDefinitionBuilder<Item> filterBuilder = Builders<Item>.Filter;
         public ItemsRepository()
         {
-            var mongoClient = new MongoClient("mongodb://localhost:27017");
+            var mongoClient = new MongoClient("mongodb://localhost:27018");
             var database = mongoClient.GetDatabase("Catalog");
             dbCollection = database.GetCollection<Item>(collectionName);
         }
@@ -21,7 +21,7 @@ namespace Play.Catalog.Service.Repositories
               return await dbCollection.Find(filterBuilder.Empty).ToListAsync();
         }
 
-        public async Task<Item> GetAsync(Guid id)
+        public async Task<Item> GetByIdAsync(Guid id)
         {
             FilterDefinition<Item> filter = filterBuilder.Eq(entity => entity.Id, id);
             return await dbCollection.Find(filter).FirstOrDefaultAsync();

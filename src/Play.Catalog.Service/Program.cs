@@ -14,11 +14,20 @@ var builder = WebApplication.CreateBuilder(args);
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-builder.Services.AddControllers();
+builder.Services.AddControllers(options =>
+{
+   options.SuppressAsyncSuffixInActionNames = true;
+});
+builder.Services.AddScoped<ItemsRepository>();
 builder.Services.AddScoped<IValidator<CreateItemDto>,CreateItemValidation>();
 builder.Services.AddScoped<IValidator<UpdateItemDto>, UpdateItemValidation>();
 
 var app = builder.Build();
+
+app.UseExceptionHandler(exceptionHandlerApp 
+    => exceptionHandlerApp.Run(async context 
+        => await Results.Problem()
+                     .ExecuteAsync(context)));
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -30,12 +39,6 @@ if (app.Environment.IsDevelopment())
 //app.UseHttpsRedirection();
 
 //Using Minimal api 
-// var items =  new List<ItemDto>()
-// {
-//     new ItemDto(Guid.NewGuid(), "Nike","Pure White", 98, DateTimeOffset.UtcNow),
-//     new ItemDto(Guid.NewGuid(), "Lascorte","Dark colour with shining stones ", 110, DateTimeOffset.UtcNow),
-//     new ItemDto(Guid.NewGuid(), "Verrari","Badest colour", 50, DateTimeOffset.UtcNow),
-// };
  
  var Items = app.MapGroup("/items");
  
@@ -46,7 +49,7 @@ Items.MapGet("/", async (ItemsRepository itemsRepository) =>
    var items = (await itemsRepository.GetAllAsync())
                   .Select(item => item.AsDto());
    return Results.Ok(items);
-}).WithName("GetAsync")
+})
 .WithOpenApi();
 
 
@@ -54,10 +57,12 @@ Items.MapGet("/", async (ItemsRepository itemsRepository) =>
 //Get/items/{id}
 Items.MapGet("/{id}", async (ItemsRepository itemsRepository, Guid id) =>
 {
-   var item = await itemsRepository.GetAsync(id);
-   return Results.Ok(item.AsDto);
+ 
+      var item = await itemsRepository.GetByIdAsync(id).ConfigureAwait(false);
+       return Results.Ok(item.AsDto());
+  
 })
-.WithName("GetById")
+.WithName("GetByIdAsync")
 .WithOpenApi();
 
 
@@ -78,7 +83,7 @@ Items.MapPost("/", async (ItemsRepository itemsRepository, IValidator<CreateItem
    };
 
    await itemsRepository.CreateAsync(item);
-   return Results.CreatedAtRoute("GetById",  new {id = item.Id}, item);
+   return Results.CreatedAtRoute("GetByIdAsync",  new {id = item.Id}, item);
 })
 .WithOpenApi();
 
@@ -93,7 +98,7 @@ Items.MapPut("/{id}", async (ItemsRepository itemsRepository, IValidator<UpdateI
      return Results.ValidationProblem(validationResult.ToDictionary());
    }
    
-   var existingItem = await itemsRepository.GetAsync(id);
+   var existingItem = await itemsRepository.GetByIdAsync(id);
    if(existingItem is null)
    {
       return Results.NotFound();
@@ -111,7 +116,7 @@ Items.MapPut("/{id}", async (ItemsRepository itemsRepository, IValidator<UpdateI
 //Delete/items/{id}
 Items.MapDelete("/{id}", async (ItemsRepository itemsRepository,Guid id) =>
 {
-   var item = await itemsRepository.GetAsync(id);
+   var item = await itemsRepository.GetByIdAsync(id);
    if(item is null)
    {
       return Results.NotFound();
