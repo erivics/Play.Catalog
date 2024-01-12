@@ -8,11 +8,21 @@ using Play.Catalog.Service.Dtos;
 using Play.Catalog.Service.Repositories;
 using Play.Catalog.Service.Validations;
 using Play.Catalog.Service.BsonFormat;
+using Play.Catalog.Service.Settings;
+using MongoDB.Driver;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+var serviceSetting = builder.Configuration.GetSection(nameof(ServiceSettings)).Get<ServiceSettings>();
+builder.Services.AddSingleton(serviceProvider =>
+{
+   var mongoDbSettings = builder.Configuration.GetSection(nameof(MongoDbSettings)).Get<MongoDbSettings>();
+   var mongoClient = new MongoClient(mongoDbSettings.ConnectionString);
+   return mongoClient.GetDatabase(serviceSetting.ServiceName);
+});
+
 BsonSerializerRegisterer.BsonSerializerRegisters();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -20,7 +30,7 @@ builder.Services.AddControllers(options =>
 {
    options.SuppressAsyncSuffixInActionNames = true;
 });
-builder.Services.AddScoped<ItemsRepository>();
+builder.Services.AddSingleton<IItemsRepository,ItemsRepository>();
 builder.Services.AddScoped<IValidator<CreateItemDto>,CreateItemValidation>();
 builder.Services.AddScoped<IValidator<UpdateItemDto>, UpdateItemValidation>();
 
@@ -46,8 +56,8 @@ if (app.Environment.IsDevelopment())
  
  
  //Get/items
-Items.MapGet("/", async (ItemsRepository itemsRepository) =>
-{
+Items.MapGet("/", async (IItemsRepository itemsRepository) =>
+{ 
    var items = (await itemsRepository.GetAllAsync())
                   .Select(item => item.AsDto());
    return Results.Ok(items);
@@ -57,7 +67,7 @@ Items.MapGet("/", async (ItemsRepository itemsRepository) =>
 
 
 //Get/items/{id}
-Items.MapGet("/{id}", async (ItemsRepository itemsRepository, Guid id) =>
+Items.MapGet("/{id}", async (IItemsRepository itemsRepository, Guid id) =>
 {
  
       var item = await itemsRepository.GetByIdAsync(id).ConfigureAwait(false);
@@ -70,7 +80,7 @@ Items.MapGet("/{id}", async (ItemsRepository itemsRepository, Guid id) =>
 
 
 //Post/items
-Items.MapPost("/", async (ItemsRepository itemsRepository, IValidator<CreateItemDto> validator, CreateItemDto createItemDto) =>
+Items.MapPost("/", async (IItemsRepository itemsRepository, IValidator<CreateItemDto> validator, CreateItemDto createItemDto) =>
 {
    ValidationResult validationResult = validator.Validate(createItemDto);
    
@@ -91,7 +101,7 @@ Items.MapPost("/", async (ItemsRepository itemsRepository, IValidator<CreateItem
 
 
 //Update/items
-Items.MapPut("/{id}", async (ItemsRepository itemsRepository, IValidator<UpdateItemDto> validator, UpdateItemDto updateItemDto, Guid id) =>
+Items.MapPut("/{id}", async (IItemsRepository itemsRepository, IValidator<UpdateItemDto> validator, UpdateItemDto updateItemDto, Guid id) =>
 {
    ValidationResult validationResult = validator.Validate(updateItemDto);
    
@@ -116,7 +126,7 @@ Items.MapPut("/{id}", async (ItemsRepository itemsRepository, IValidator<UpdateI
 .WithOpenApi();
 
 //Delete/items/{id}
-Items.MapDelete("/{id}", async (ItemsRepository itemsRepository,Guid id) =>
+Items.MapDelete("/{id}", async (IItemsRepository itemsRepository,Guid id) =>
 {
    var item = await itemsRepository.GetByIdAsync(id);
    if(item is null)
