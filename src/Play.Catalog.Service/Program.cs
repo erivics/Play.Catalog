@@ -30,7 +30,13 @@ builder.Services.AddControllers(options =>
 {
    options.SuppressAsyncSuffixInActionNames = true;
 });
-builder.Services.AddSingleton<IItemsRepository,ItemsRepository>();
+
+builder.Services.AddSingleton<IRepository<Item>>(serviceProvider => 
+{
+   var database = serviceProvider.GetService<IMongoDatabase>();
+   return new MongoRepository<Item>(database, "items");
+});
+
 builder.Services.AddScoped<IValidator<CreateItemDto>,CreateItemValidation>();
 builder.Services.AddScoped<IValidator<UpdateItemDto>, UpdateItemValidation>();
 
@@ -56,7 +62,7 @@ if (app.Environment.IsDevelopment())
  
  
  //Get/items
-Items.MapGet("/", async (IItemsRepository itemsRepository) =>
+Items.MapGet("/", async (IRepository<Item> itemsRepository) =>
 { 
    var items = (await itemsRepository.GetAllAsync())
                   .Select(item => item.AsDto());
@@ -67,7 +73,7 @@ Items.MapGet("/", async (IItemsRepository itemsRepository) =>
 
 
 //Get/items/{id}
-Items.MapGet("/{id}", async (IItemsRepository itemsRepository, Guid id) =>
+Items.MapGet("/{id}", async (IRepository<Item> itemsRepository, Guid id) =>
 {
  
       var item = await itemsRepository.GetByIdAsync(id).ConfigureAwait(false);
@@ -80,7 +86,7 @@ Items.MapGet("/{id}", async (IItemsRepository itemsRepository, Guid id) =>
 
 
 //Post/items
-Items.MapPost("/", async (IItemsRepository itemsRepository, IValidator<CreateItemDto> validator, CreateItemDto createItemDto) =>
+Items.MapPost("/", async (IRepository<Item> itemsRepository, IValidator<CreateItemDto> validator, CreateItemDto createItemDto) =>
 {
    ValidationResult validationResult = validator.Validate(createItemDto);
    
@@ -101,7 +107,7 @@ Items.MapPost("/", async (IItemsRepository itemsRepository, IValidator<CreateIte
 
 
 //Update/items
-Items.MapPut("/{id}", async (IItemsRepository itemsRepository, IValidator<UpdateItemDto> validator, UpdateItemDto updateItemDto, Guid id) =>
+Items.MapPut("/{id}", async (IRepository<Item> itemsRepository, IValidator<UpdateItemDto> validator, UpdateItemDto updateItemDto, Guid id) =>
 {
    ValidationResult validationResult = validator.Validate(updateItemDto);
    
@@ -126,7 +132,7 @@ Items.MapPut("/{id}", async (IItemsRepository itemsRepository, IValidator<Update
 .WithOpenApi();
 
 //Delete/items/{id}
-Items.MapDelete("/{id}", async (IItemsRepository itemsRepository,Guid id) =>
+Items.MapDelete("/{id}", async (IRepository<Item> itemsRepository,Guid id) =>
 {
    var item = await itemsRepository.GetByIdAsync(id);
    if(item is null)
