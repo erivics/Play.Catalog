@@ -7,11 +7,13 @@ using Play.Catalog.Service.Entities;
 using Play.Catalog.Service.Dtos;
 using Play.Catalog.Service.Repositories;
 using Play.Catalog.Service.Validations;
+using Play.Catalog.Service.BsonFormat;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+BsonSerializerRegisterer.BsonSerializerRegisters();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddControllers(options =>
