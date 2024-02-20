@@ -1,42 +1,31 @@
-using System.ComponentModel;
 using FluentValidation;
 using FluentValidation.Results;
-using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Play.Catalog.Service;
 using Play.Catalog.Service.Entities;
 using Play.Catalog.Service.Dtos;
-using Play.Catalog.Service.Repositories;
 using Play.Catalog.Service.Validations;
-using Play.Catalog.Service.BsonFormat;
-using Play.Catalog.Service.Settings;
-using MongoDB.Driver;
+using Play.Common;
+using Play.Common.MongoDB;
+using Play.Common.Settings;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-var serviceSetting = builder.Configuration.GetSection(nameof(ServiceSettings)).Get<ServiceSettings>();
-builder.Services.AddSingleton(serviceProvider =>
-{
-   var mongoDbSettings = builder.Configuration.GetSection(nameof(MongoDbSettings)).Get<MongoDbSettings>();
-   var mongoClient = new MongoClient(mongoDbSettings.ConnectionString);
-   return mongoClient.GetDatabase(serviceSetting.ServiceName);
-});
+ 
 
-BsonSerializerRegisterer.BsonSerializerRegisters();
+var serviceSettings = builder.Configuration.GetSection(nameof(ServiceSettings)).Get<ServiceSettings>();
+
+builder.Services.AddMongo()
+                  .AddMongoRepository<Item>("items");
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddControllers(options =>
 {
    options.SuppressAsyncSuffixInActionNames = true;
 });
-
-builder.Services.AddSingleton<IRepository<Item>>(serviceProvider => 
-{
-   var database = serviceProvider.GetService<IMongoDatabase>();
-   return new MongoRepository<Item>(database, "items");
-});
-
+  
 builder.Services.AddScoped<IValidator<CreateItemDto>,CreateItemValidation>();
 builder.Services.AddScoped<IValidator<UpdateItemDto>, UpdateItemValidation>();
 
@@ -76,11 +65,12 @@ Items.MapGet("/", async (IRepository<Item> itemsRepository) =>
 Items.MapGet("/{id}", async (IRepository<Item> itemsRepository, Guid id) =>
 {
  
-      var item = await itemsRepository.GetByIdAsync(id).ConfigureAwait(false);
+      var item = await itemsRepository.GetAsync(id).ConfigureAwait(false);
+      if (item == null) return Results.NotFound();
        return Results.Ok(item.AsDto());
   
 })
-.WithName("GetByIdAsync")
+.WithName("GetAsync")
 .WithOpenApi();
 
 
@@ -101,7 +91,7 @@ Items.MapPost("/", async (IRepository<Item> itemsRepository, IValidator<CreateIt
    };
 
    await itemsRepository.CreateAsync(item);
-   return Results.CreatedAtRoute("GetByIdAsync",  new {id = item.Id}, item);
+   return Results.CreatedAtRoute("GetAsync",  new {id = item.Id}, item);
 })
 .WithOpenApi();
 
@@ -116,7 +106,7 @@ Items.MapPut("/{id}", async (IRepository<Item> itemsRepository, IValidator<Updat
      return Results.ValidationProblem(validationResult.ToDictionary());
    }
    
-   var existingItem = await itemsRepository.GetByIdAsync(id);
+   var existingItem = await itemsRepository.GetAsync(id);
    if(existingItem is null)
    {
       return Results.NotFound();
@@ -134,7 +124,7 @@ Items.MapPut("/{id}", async (IRepository<Item> itemsRepository, IValidator<Updat
 //Delete/items/{id}
 Items.MapDelete("/{id}", async (IRepository<Item> itemsRepository,Guid id) =>
 {
-   var item = await itemsRepository.GetByIdAsync(id);
+   var item = await itemsRepository.GetAsync(id);
    if(item is null)
    {
       return Results.NotFound();
